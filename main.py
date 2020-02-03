@@ -42,7 +42,7 @@ def test(model, testloader):
         y_pred = F.softmax(out, dim=1)
         y_pred_label_tmp = torch.argmax(y_pred, dim=1)
 
-        loss = F.cross_entropy(y_pred, y_true)
+        loss = F.cross_entropy(out, y_true)
         avg_loss.update(loss, img.shape[0])
 
         # Add the labels
