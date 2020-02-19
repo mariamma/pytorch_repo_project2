@@ -1,28 +1,17 @@
-"""
-Starter Code in Pytorch for training a multi layer neural network. 
-
-** Takes around 30 minutes to train. 
-"""
-
-import numpy as np
-import pdb
-import os
-from tqdm import tqdm
-
-from matplotlib import pyplot as plt
-
-import torch
+import torch 
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
+import torchvision.datasets as dsets
+from skimage import transform
+import torchvision.transforms as transforms
 from torch.autograd import Variable
+import pandas as pd;
+import numpy as np;
 from torch.utils.data import Dataset, DataLoader
-
-import torchvision
+# from vis_utils import *
+import random;
+import math;
 from torchvision.datasets import FashionMNIST
-from torchvision import transforms
-
-from utils import AverageMeter
+from matplotlib import pyplot as plt
 
 
 """
@@ -31,44 +20,35 @@ from utils import AverageMeter
 ---------------------------------------------------------------------------------------------------
 """
 
+num_epochs = 20;
+batch_size = 100;
+learning_rate = 0.001;
 
-class LeNet(nn.Module):
+trans_img = transforms.Compose([transforms.ToTensor()])
+train_dataset = FashionMNIST("./data/", train=True, transform=trans_img, download=True)
+train_loader = DataLoader(train_dataset, batch_size=1024, shuffle=True)
 
-    def __init__(self, n_classes=10):
-        emb_dim = 20
-        '''
-        Define the initialization function of LeNet, this function defines
-        the basic structure of the neural network
-        '''
-
-        super(LeNet, self).__init__()
-        self.conv1 = nn.Conv2d(1, 32, kernel_size=5, stride=1, padding=2)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=5, stride=1, padding=2)
-        self.emb = nn.Linear(64*7*7, emb_dim)
-        self.clf = nn.Linear(emb_dim, n_classes)
-
-    def num_flat_features(self, x):
-        '''
-        Calculate the total tensor x feature amount
-        '''
-
-        size = x.size()[1:]  # All dimensions except batch dimension
-        num_features = 1
-        for s in size:
-            num_features *= s
-
-        return num_features
-
+class CNN(nn.Module):
+    def __init__(self):
+        super(CNN, self).__init__()
+        self.layer1 = nn.Sequential(
+            nn.Conv2d(1, 16, kernel_size=5, padding=2),
+            nn.BatchNorm2d(16),
+            nn.ReLU(),
+            nn.MaxPool2d(2))
+        self.layer2 = nn.Sequential(
+            nn.Conv2d(16, 32, kernel_size=5, padding=2),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.MaxPool2d(2))
+        self.fc = nn.Linear(7*7*32, 10)
+        
     def forward(self, x):
-        x = x.view(-1, 1, 28, 28)
-        x = F.max_pool2d(F.relu(self.conv1(x)), 2)
-        x = F.max_pool2d(F.relu(self.conv2(x)), 2)
-        x = x.view(-1, self.num_flat_features(x))
-        x = self.emb(x)
-        out = self.clf(x)
-
+        out = self.layer1(x)
+        out = self.layer2(out)
+        out = out.view(out.size(0), -1)
+        out = self.fc(out)
         return out
-
 
 """
 ---------------------------------------------------------------------------------------------------
@@ -77,59 +57,40 @@ class LeNet(nn.Module):
 """
 
 
-def train_one_epoch(model, trainloader, optimizer, device):
-    """ Training the model using the given dataloader for 1 epoch.
-
-    Input: Model, Dataset, optimizer, 
-    """
-
-    model.train()
-    avg_loss = AverageMeter("average-loss")
-    for batch_idx, (img, target) in enumerate(trainloader):
-        img = Variable(img).to(device)
-        target = Variable(target).to(device)
-
-        # Zero out the gradients
-        optimizer.zero_grad()
-
-        # Forward Propagation
-        prob = model(img)
-        loss = F.cross_entropy(prob, target)
-
-        # backward propagation
-        loss.backward()
-        avg_loss.update(loss, img.shape[0])
-
-        # Update the model parameters
-        optimizer.step()
-
-    return avg_loss.avg
-
-
 if __name__ == "__main__":
+    #instance of the Conv Net
+    cnn = CNN();
+    #loss function and optimizer
+    criterion = nn.CrossEntropyLoss();
+    optimizer = torch.optim.Adam(cnn.parameters(), lr=learning_rate);
 
-    number_epochs = 100
 
-    # Use torch.device("cuda:0") if you want to train on GPU
-    # OR Use torch.device("cpu") if you want to train on CPU
-    device = torch.device('cuda:0')
-
-    model = LeNet(10).to(device)
-
-    trans_img = transforms.Compose([transforms.ToTensor()])
-    dataset = FashionMNIST("./data/", train=True, transform=trans_img, download=True)
-    trainloader = DataLoader(dataset, batch_size=1024, shuffle=True)
-
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-
+    losses = [];
+    num_epochs = 2;
     track_loss = []
-    for i in tqdm(range(number_epochs)):
-        loss = train_one_epoch(model, trainloader, optimizer, device)
-        track_loss.append(loss)
+    for epoch in range(num_epochs):
+        for i, (images, labels) in enumerate(train_loader):
+            images = Variable(images.float())
+            labels = Variable(labels)
+            
+            # Forward + Backward + Optimize
+            optimizer.zero_grad()
+            outputs = cnn(images)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            
+            losses.append(loss.item());
+            
+            if (i) % 100 == 0:
+                track_loss.append(loss.item())
+                print ('Epoch : %d/%d, Iter : %d/%d,  Loss: %.4f' 
+                       %(epoch+1, num_epochs, i+1, len(train_dataset)//batch_size, loss.item()))
+                    
 
     plt.figure()
     plt.plot(track_loss)
     plt.title("training-loss-ConvNet")
-    plt.savefig("./img/training_convnet.jpg")
+    plt.savefig("./img/training_convnet1.png")
 
-    torch.save(model.state_dict(), "./models/convNet.pt")
+    torch.save(cnn.state_dict(), "./models/convNet1.pt")

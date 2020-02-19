@@ -21,6 +21,7 @@ from torchvision.datasets import FashionMNIST
 from torchvision import transforms
 
 from utils import AverageMeter
+from sklearn.metrics import confusion_matrix
 
 
 def test(model, testloader):
@@ -52,6 +53,31 @@ def test(model, testloader):
     return avg_loss.avg, y_gt, y_pred_label
 
 
+def testML(cnn2,testloader):
+    correct = 0
+    total = 0
+    # Initialize the prediction and label lists(tensors)
+    predlist=torch.zeros(0,dtype=torch.long, device='cpu')
+    lbllist=torch.zeros(0,dtype=torch.long, device='cpu')
+
+    with torch.no_grad():
+        for data in testloader:
+            images, labels = data
+            outputs = cnn2(images)
+            _, predicted = torch.max(outputs.data, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum()
+            # Append batch prediction results
+            predlist=torch.cat([predlist,predicted.view(-1).cpu()])
+            lbllist=torch.cat([lbllist,labels.view(-1).cpu()])
+
+    print('Accuracy of the network on the 10000 test images: %d %%' % (
+        100 * correct / total))
+    # Confusion matrix
+    conf_mat=confusion_matrix(lbllist.numpy(), predlist.numpy())
+    print(conf_mat)    
+
+
 if __name__ == "__main__":
 
     trans_img = transforms.Compose([transforms.ToTensor()])
@@ -60,22 +86,26 @@ if __name__ == "__main__":
 
     from train_multi_layer import MLP
     model_MLP = MLP(10)
-    model_MLP.load_state_dict(torch.load("./models/MLP.pt"))
+    model_MLP.load_state_dict(torch.load("./models/MLP2.pt"))
 
-    from training_conv_net import LeNet
-    model_conv_net = LeNet(10)
-    model_conv_net.load_state_dict(torch.load("./models/convNet.pt"))
+    from training_conv_net import CNN
+    model_conv_net = CNN()
+    model_conv_net.load_state_dict(torch.load("./models/model_cnn3.pth"))
 
+    testML(model_MLP, testloader)
     loss, gt, pred = test(model_MLP, testloader)
-    with open("multi-layer-net.txt", 'w') as f:
-        f.write("Loss on Test Data : {}\n".format(loss))
-        f.write("Accuracy on Test Data : {}\n".format(np.mean(np.array(gt) == np.array(pred))))
-        f.write("gt_label,pred_label \n")
-        for idx in range(len(gt)):
-            f.write("{},{}\n".format(gt[idx], pred[idx]))
+    print("Accuracy on Test Data : {}\n".format(np.mean(np.array(gt) == np.array(pred))))
+    with open("multi-layer-net1.txt", 'w') as f:
+         f.write("Loss on Test Data : {}\n".format(loss))
+         f.write("Accuracy on Test Data : {}\n".format(np.mean(np.array(gt) == np.array(pred))))
+         f.write("gt_label,pred_label \n")
+         for idx in range(len(gt)):
+             f.write("{},{}\n".format(gt[idx], pred[idx]))
 
+    testML(model_conv_net, testloader)         
     loss, gt, pred = test(model_conv_net, testloader)
-    with open("convolution-neural-net.txt", 'w') as f:
+    print("Accuracy on Test Data : {}\n".format(np.mean(np.array(gt) == np.array(pred))))
+    with open("convolution-neural-net1.txt", 'w') as f:
         f.write("Loss on Test Data : {}\n".format(loss))
         f.write("Accuracy on Test Data : {}\n".format(np.mean(np.array(gt) == np.array(pred))))
         f.write("gt_label,pred_label \n")
